@@ -1,0 +1,116 @@
+# Tessera capstone — self-contained compose (does NOT merge labs/base/compose.yml).
+#
+# Ships only the upstream vendor mock:
+#   data-init      one-shot: downloads four HV-FHV monthly parquet files + the
+#                  taxi-zone lookup CSV into the tlc-cache volume.
+#                  Idempotent (skips if _READY is present).
+#   minio          single-node S3 server. Bucket tlc-drops (created by
+#                  tlc-publisher on startup).
+#   tlc-publisher  FastAPI service that reads from tlc-cache (read-only) and
+#                  PUTs each month's parquet into the bucket when its
+#                  simulated publication date arrives. Exposes /healthz,
+#                  /stats, /simulated_now on host port 18910.
+#
+# Students add their own services (Spark, Postgres, Redis, etc.) below.
+# Container names and host ports are prefixed/shifted so this can coexist with
+# the main course `labs/` (which use the default ports).
+
+name: tessera
+
+volumes:
+  tlc-cache:
+  minio-data:
+  postgres-data:
+
+services:
+  data-init:
+    build: ./vendor
+    container_name: tessera-data-init
+    command: ["python", "/app/download_and_preprocess.py", "/cache"]
+    volumes:
+      - tlc-cache:/cache
+      # Optional host-cache passthrough: set HVFHV_CACHE_DIR in .env to a host
+      # directory holding pre-downloaded `fhvhv_tripdata_*.parquet` and/or
+      # `taxi_zone_lookup.csv`. The default points at an empty in-scaffold
+      # directory so the bind-mount always resolves (compose creates the path
+      # as root otherwise). See README → "Host-cache passthrough".
+      - ${HVFHV_CACHE_DIR:-./.host-cache-empty}:/host-cache:ro
+    # Needs REPLAY_WINDOW_START/END so it knows which months to fetch.
+    env_file:
+      - .env
+    restart: "no"
+
+  minio:
+    image: minio/minio
+    container_name: tessera-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tessera}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tessera-secret}
+    ports:
+      - "18900:9000"
+      - "18901:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/minio/health/live || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  tlc-publisher:
+    build: ./vendor
+    container_name: tessera-tlc-publisher
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      data-init:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    volumes:
+      # Read/write because the publisher persists _publisher_state.json here
+      # (the parquet files themselves are only read).
+      - tlc-cache:/cache
+    ports:
+      - "18910:8000"
+    # We don't use env_file here on purpose: env_file values always win over
+    # shell-exported vars, which would defeat `make vendor-chaos` (it exports
+    # the chaos knobs at the shell). Instead use compose variable substitution
+    # — values resolve from shell first, then from .env (compose loads it
+    # automatically), then from the inline default.
+    environment:
+      CACHE_DIR: /cache
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: tlc-drops
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-tessera}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-tessera-secret}
+      REPLAY_SECONDS_PER_MONTH: ${REPLAY_SECONDS_PER_MONTH:-75}
+      REPLAY_WINDOW_START: ${REPLAY_WINDOW_START:-2024-09}
+      REPLAY_WINDOW_END: ${REPLAY_WINDOW_END:-2024-12}
+      VENDOR_LATE_CORRECTION_RATE: ${VENDOR_LATE_CORRECTION_RATE:-0}
+      VENDOR_CHAOS_CHECK_SIM_DAYS: ${VENDOR_CHAOS_CHECK_SIM_DAYS:-5}
+    # host.docker.internal works out of the box on Docker Desktop (mac/windows).
+    # The extra_hosts mapping below makes it resolve on Linux too, so student
+    # services running on the host are reachable from the container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz').status==200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  postgres:
+    image: postgres:16
+    container_name: tessera-postgres
+    environment:
+      POSTGRES_USER: tessera
+      POSTGRES_PASSWORD: tessera-secret
+      POSTGRES_DB: tessera
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+

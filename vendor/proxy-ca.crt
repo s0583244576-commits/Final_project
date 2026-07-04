@@ -1,0 +1,33 @@
+docker : Unable to find image 'python:3.13-slim' locally
+At line:1 char:1
++ docker run --rm python:3.13-slim python3 -c "
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Unable to find ...3-slim' locally:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+3.13-slim: Pulling from library/python
+Digest: sha256:c33f0bc4364a6881bed1ec0cc2665e6c53c87a43e774aaeab88e6f17af105e4f
+Status: Downloaded newer image for python:3.13-slim
+-----BEGIN CERTIFICATE-----
+MIID2zCCA2CgAwIBAgIIGLtqgJzyrsIwCgYIKoZIzj0EAwMwPjEOMAwGA1UEChMF
+QmV6ZXExLDAqBgNVBAMTI05ldEZyZWUgTm9kZSBJbnRlcm1lZGlhdGUgQ0EsIEJl
+emVxMB4XDTI1MTIyODA0MzMwOFoXDTI3MDEyOTA0MzMwN1owEzERMA8GA1UEAxMI
+cHlwaS5vcmcwdjAQBgcqhkjOPQIBBgUrgQQAIgNiAARjGnSHk1gHFx+FWsNGvFt/
+ZhxlW1zyvmfsjlG07gxupj6fPMwyUesnflmUVlOp0Lc59cXdgKsxjEYoiqy70EVU
+Z1jUGhxnENo9igTptuhIbUWv+5+G4G61sybMzjAspQmjggJUMIICUDAOBgNVHQ8B
+Af8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMB8GA1UdIwQY
+MBaAFJNM99/UALpwBgLW9XQ8FfRJdipmMD4GA1UdEQQ3MDWCCHB5cGkub3Jnggoq
+LnB5cGkub3Jnggx3d3cucHlwaS5vcmeCD2RvbmF0ZS5weXBpLm9yZzA8BgNVHR8E
+NTAzMDGgL6AthitodHRwOi8vYXBpLmludGVybmFsLm5ldGZyZWUubGluay9jcmwv
+Y2EuY3JsMIIBfgYKKwYBBAHWeQIEAgSCAW4EggFqAWgAdwBMY9yY5Zwdq4j2Hoo9
+3q6Pq0SjN3tfm5TD+6Gc/MG+JgAAAZtjO1DAAAAEAwBIMEYCIQCIfeHjkfcIipg2
+Gcpu4Sdaf6FUZA5QZResnRdDmnqyIQIhAPAFblsSYP3fedQHO32/k7GaxrWqFYeY
+0KnfLRIQx7T0AHUAHJ9oLOn68EVpUPgbloqH3dsyENhM5siy44JSSsTPWZ8AAAGb
+YztRhwAABAMARjBEAiEAwIBKksnjST8XmhPUdjzCYMdC6tKhNCy8QIyAlcIh5MgC
+HylbdNs/c6Lgj50DIekaJv8XDVuYppXB9JFeKa5YkIEAdgBgTJqven93XwHUBvyS
+DciZ6wscffjJUhv6+hd3O5eLyQAAAZtjO1IoAAAEAwBHMEUCIQCGCF25QeE1T2SG
+rvgoIwHWGwxkTQFX+HTbCP0y30oc/wIgNl0uGR4WDTjqWRkObrGV84FMKCjTf94O
+Ut/wDevw7WswCgYIKoZIzj0EAwMDaQAwZgIxAIZuUcZ33LDIUPmVbVVD1HM5ZaTQ
+3KPoBK6l4U4iZqs5FgXjsSKbbfxDpfriZaUChgIxAMOde1+qLj9hRibY+B9yefzR
+KELlgWAmhO3u7keMW0PqBKu8Iv72U7DtNbC2DjhEig==
+-----END CERTIFICATE-----

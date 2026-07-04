@@ -1,0 +1,13 @@
+[project]
+name = "tessera-vendor"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.32,<1",
+    "pyarrow>=18,<19",
+    "boto3>=1.35,<2",
+    "botocore>=1.35,<2",
+    "requests>=2.32,<3",
+    "pydantic>=2.7,<3",
+]

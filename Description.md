@@ -1,3 +1,97 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                        TESSERA — DATA FLOW                               ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          UPSTREAM (vendor)                               │
+│                                                                         │
+│   tlc-publisher  ──→  MinIO (S3)  bucket: tlc-drops                    │
+│   (simulated clock)   fhvhv_tripdata_2024-09.parquet  ~20M rows        │
+│   /simulated_now      fhvhv_tripdata_2024-10.parquet  ~20M rows        │
+│   /stats              fhvhv_tripdata_2024-11.parquet  ~20M rows        │
+│                        fhvhv_tripdata_2024-12.parquet  ~20M rows       │
+│   [late correction]    taxi_zone_lookup.csv                             │
+│   new ETag if file     ──────────────────────────────                  │
+│   was re-published     total: ~80M rows, ~2 GB                         │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │ S3 LIST every 30s
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        INGESTION PIPELINE                                │
+│                                                                         │
+│  watcher.py  (loop every 30s)                                           │
+│       │                                                                 │
+│       ▼                                                                 │
+│  check_files.py                                                         │
+│    • S3 LIST → get (filename, ETag) for each file                      │
+│    • compare to file_tracking table in PostgreSQL                       │
+│    • detect: NEW file  OR  ETag changed (= late correction)            │
+│       │                                                                 │
+│       ▼  (only for new/changed files)                                   │
+│  readData.py  ←  DuckDB  (fast parquet engine)                         │
+│    • downloads parquet from MinIO to temp dir                           │
+│    • joins with taxi_zone_lookup.csv                                    │
+│    • runs 5 pre-aggregation queries (one per business question)         │
+│    • writes results to PostgreSQL                                       │
+│    • deletes old rows for that month first (handles corrections)        │
+│    • updates file_tracking (filename, ETag, processed_at)              │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │ pre-aggregated rows
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     POSTGRESQL  (persistent storage)                     │
+│                                                                         │
+│  file_tracking        filename | etag | processed_at                   │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  q1_progress          (zone, hour, day_of_week) → dpm_values[]         │
+│  surge_hotspots  ◄─── materialized from q1_progress per month          │
+│                        pickup_zone, hour, day, median_$/mile, count     │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  q2_progress          (zone, hour) → wait_values[] (seconds)           │
+│  q2_hotspots     ◄─── top-25 zones by p90 wait at 8 AM                │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  q3_progress          (pickup_zone, dropoff_zone) → shared counts      │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  q4_progress          (month, licensee) → gross_fare, driver_pay       │
+│  ─────────────────────────────────────────────────────────────────────  │
+│  q5_medians           (pickup_borough, dropoff_borough) →              │
+│                        median trip_time, sample_size per month          │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │ simple SELECT, no heavy GROUP BY
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          SERVING LAYER                                   │
+│                                                                         │
+│  python main.py [1-5]                                                   │
+│    1. GET /simulated_now  →  resolve "most recent month" / "trailing N  │
+│                               days" at query time                       │
+│    2. SELECT from pre-aggregated table                                  │
+│    3. return result                                                     │
+│                                                                         │
+│  Q1 surge hotspots      → SELECT FROM surge_hotspots WHERE month=?     │
+│  Q2 wait time p50/p90   → SELECT FROM q2_hotspots  (pre-computed)      │
+│  Q3 shared-ride match   → SELECT FROM q3_progress  GROUP BY zone pair  │
+│  Q4 driver pay share    → SELECT FROM q4_progress  GROUP BY month      │
+│  Q5 rush-hour shift     → SELECT FROM q5_medians   GROUP BY borough    │
+│                                                                         │
+│                    ✓  every query < 1 second                           │
+└─────────────────────────────────────────────────────────────────────────┘
+
+LATE CORRECTION FLOW:
+  MinIO re-PUT file with new ETag
+      → check_files detects ETag mismatch
+      → process_file deletes old rows for that month
+      → re-aggregates from corrected parquet
+      → surge_hotspots / q2_hotspots refreshed
+      → next query returns corrected values  (<1s still)
+
+
+
+
+
+
+
+
 הפרויקט מתחיל בבדיקה על הקבצים האם השתנו או התווספו .
 בדיקה זו רצה כל 30 שניות.
 
